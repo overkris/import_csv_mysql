@@ -64,27 +64,50 @@ class ImportCsvInDataBaseCommand extends Command
     		
     		// Parse des fichier
     		$iNumLigne = 1;
+			$iNbLigneInsert = 0;
+    		
+			$sTexteWrite = "";
     		// Ouverture du fichier
     		if (($handle = fopen($sValuePathFiles["path"], "r")) !== FALSE) {
     			// Traitement ligne à ligne
     			while (($data = fgetcsv($handle, null, ";")) !== FALSE) {
     				if ($iNumLigne > 2) {
-    					$sTexteWrite = "INSERT INTO interventions ($sChaineColonne) VALUES";
-    					$this->_writeFile($fp, $sTexteWrite);
+    					// Si on arrive à 100 on recommence un groupe
+    					if ($iNbLigneInsert == 100) {
+    						$sTexteWrite = substr($sTexteWrite, 0, -2);
+    						$sTexteWrite .= ";\n";
+    						$iNbLigneInsert = 0;
+    					}
+    					
+    					// En-tête d'une ligne de données
+    					if ($iNbLigneInsert == 0) {
+	    					$sTexteWrite .= "INSERT INTO interventions ($sChaineColonne) VALUES\n";
+    					}
 
-    					$sTexteWrite = "  (";
+    					// Construction de la ligne de données
+    					$iFirstCol = true;
+    					$sTexteWrite .= "  (";
     					foreach ($data as $key => $value) {
+    						if (!$iFirstCol) {
+    							$sTexteWrite .= ",";
+    						}
+    						$iFirstCol = false;
+    						
     						if (strlen($value) > $aDimensionVar[$key]) {
     							$aDimensionVar[$key] = strlen($value);
     						}
-    						$sTexteWrite .= "'".addslashes($value)."', ";
+    						$sTexteWrite .= "'".addslashes($value)."'";
     					}
-    					$sTexteWrite = substr($sTexteWrite, 0, -2);
-    					$sTexteWrite .= ");";
-    					$this->_writeFile($fp, $sTexteWrite);
+    					$sTexteWrite .= "),\n";
+    					
+    					$iNbLigneInsert++;
     					continue;
     				}
+    				
+    				// Si on est au début du fichier et qu'on ne l'a pas déjà fait on init les nom des colonnes
+    				// Et le compteur de taille
     				if ($bInitDim && $iNumLigne == 2) {
+    					// Init de tableaux
     					$nbColonne = count($data);
     					for ($i=0; $i<$nbColonne;$i++) {
     						$aDimensionVar[$i] = 1;
@@ -92,11 +115,14 @@ class ImportCsvInDataBaseCommand extends Command
     					}
     					
     					// Construction de la chaine de colonne
-    					$sChaineColonne = "'".implode("','", $aNameColonne)."'";
+    					$sChaineColonne = "`".implode("`,`", $aNameColonne)."`";
     					$bInitDim = false;
     				}
     				$iNumLigne++;
     			}
+    			$sTexteWrite = substr($sTexteWrite, 0, -2);
+    			$sTexteWrite .= ";\n";
+    			$this->_writeFile($fp, $sTexteWrite);
     			fclose($handle);
     		}
     	}
@@ -109,7 +135,7 @@ class ImportCsvInDataBaseCommand extends Command
     	$this->_writeFile($fp, $sTexteWrite);
     	$sTexteWrite = "";
     	foreach ($aNameColonne as $iKey => $sNameColonne) {
-    		$sTexteWrite .= "'$sNameColonne' VARCHAR(".$aDimensionVar[$iKey].") NULL,\n";
+    		$sTexteWrite .= "`$sNameColonne` VARCHAR(".$aDimensionVar[$iKey].") NULL,\n";
     	}
     	$sTexteWrite = substr($sTexteWrite, 0, -2);
     	$this->_writeFile($fp, $sTexteWrite);
